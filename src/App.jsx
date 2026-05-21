@@ -39,6 +39,24 @@ function App() {
     }
   };
 
+  // Purga única para producción: deja todo en ceros (existencias, transacciones, cortes, mermas, clientes ficticios)
+  try {
+    const isCleared = localStorage.getItem('pos_prod_cleared_v1');
+    if (!isCleared) {
+      localStorage.removeItem('pos_products');
+      localStorage.removeItem('pos_transactions');
+      localStorage.removeItem('pos_cash_cuts');
+      localStorage.removeItem('pos_mermas');
+      localStorage.removeItem('pos_customers');
+      localStorage.removeItem('pos_users');
+      localStorage.removeItem('pos_active_session');
+      localStorage.removeItem('pos_current_user');
+      localStorage.setItem('pos_prod_cleared_v1', 'true');
+    }
+  } catch (e) {
+    console.error('Error al realizar la purga de localStorage', e);
+  }
+
   // ----------------------------------------------------
   // Global States
   // ----------------------------------------------------

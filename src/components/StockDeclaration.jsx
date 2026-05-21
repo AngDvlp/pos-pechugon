@@ -8,14 +8,15 @@ export default function StockDeclaration({ products, setProducts, showToast }) {
 
   const categories = [
     { id: 'all', name: 'Todos' },
-    { id: 'alimentos', name: 'Rosticería' },
-    { id: 'snacks', name: 'Complementos' },
-    { id: 'bebidas', name: 'Bebidas' }
+    { id: 'basicos', name: 'Básicos' },
+    { id: 'complementos', name: 'Complementos' },
+    { id: 'postres', name: 'Postres' },
+    { id: 'varios', name: 'Varios' }
   ];
 
   // Filter products to show only relevant ones (Prepared food & sides & drinks)
   const filteredProducts = products.filter(p => {
-    return selectedCategory === 'all' || p.category === selectedCategory;
+    return !p.isCombo && (selectedCategory === 'all' || p.category === selectedCategory);
   });
 
   // Handle value change for a specific SKU
