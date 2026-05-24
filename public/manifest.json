@@ -3,7 +3,11 @@
   "name": "Rosticerías El Pechugón - POS",
   "description": "Punto de Venta Premium para Rosticerías El Pechugón. Optimizado para tablets y funcionamiento offline.",
   "id": "/?source=pwa",
+  "lang": "es-MX",
+  "dir": "ltr",
+  "scope": "/",
   "categories": ["food", "business", "productivity"],
+  "display_override": ["standalone", "window-controls-overlay"],
   "icons": [
     {
       "src": "/favicon.svg",
@@ -38,6 +42,20 @@
       "sizes": "1024x576",
       "form_factor": "wide",
       "label": "Vista del Punto de Venta"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Abrir POS Terminal",
+      "short_name": "Terminal",
+      "description": "Acceso directo para facturar y vender",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "start_url": "/",
