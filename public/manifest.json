@@ -24,6 +24,22 @@
       "purpose": "any"
     }
   ],
+  "screenshots": [
+    {
+      "src": "/screenshot-1.png",
+      "type": "image/png",
+      "sizes": "893x1024",
+      "form_factor": "narrow",
+      "label": "Vista de Inicio de Sesión"
+    },
+    {
+      "src": "/screenshot-2.jpg",
+      "type": "image/jpeg",
+      "sizes": "1024x576",
+      "form_factor": "wide",
+      "label": "Vista del Punto de Venta"
+    }
+  ],
   "start_url": "/",
   "background_color": "#0a0e1a",
   "theme_color": "#f59e0b",
