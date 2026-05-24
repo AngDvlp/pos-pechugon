@@ -10,7 +10,8 @@ export default function CashCut({
   closeSession, 
   transactions, 
   mermas, 
-  showToast 
+  showToast,
+  settings
 }) {
   const [initialCashInput, setInitialCashInput] = useState('1000.00');
   const [actualCashInput, setActualCashInput] = useState('');
@@ -437,7 +438,165 @@ export default function CashCut({
 
             <div style={styles.ticketActions}>
               <button className="btn btn-secondary" onClick={() => {
-                showToast('Imprimiendo reporte de corte... (Simulación)', 'success');
+                try {
+                  const iframe = document.createElement('iframe');
+                  iframe.style.position = 'fixed';
+                  iframe.style.right = '0';
+                  iframe.style.bottom = '0';
+                  iframe.style.width = '0';
+                  iframe.style.height = '0';
+                  iframe.style.border = '0';
+                  document.body.appendChild(iframe);
+
+                  const doc = iframe.contentWindow.document;
+                  const formattedDate = new Date(showCutReceipt.date).toLocaleString('es-MX', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                  });
+
+                  const itemsHtml = showCutReceipt.salesBreakdown && showCutReceipt.salesBreakdown.length > 0
+                    ? showCutReceipt.salesBreakdown.map(item => `
+                      <tr>
+                        <td style="padding: 2px 0; font-family: monospace; font-size: 10px;">
+                          ${item.name.toUpperCase()} (x${item.quantity})
+                        </td>
+                        <td style="text-align: right; padding: 2px 0; font-family: monospace; font-size: 10px;">
+                          $${item.totalRevenue.toFixed(2)}
+                        </td>
+                      </tr>
+                    `).join('')
+                    : '<tr><td colspan="2" style="text-align:center;font-size:10px;">Sin artículos vendidos</td></tr>';
+
+                  doc.write(`
+                    <html>
+                      <head>
+                        <title>Corte de Caja</title>
+                        <style>
+                          @page { margin: 0; size: auto; }
+                          body {
+                            font-family: 'Courier New', Courier, monospace;
+                            width: 58mm; /* standard 58mm thermal print width */
+                            margin: 0;
+                            padding: 4px;
+                            color: #000;
+                            font-size: 10px;
+                            line-height: 1.2;
+                          }
+                          .text-center { text-align: center; }
+                          .text-right { text-align: right; }
+                          .bold { font-weight: bold; }
+                          .divider { border-top: 1px dashed #000; margin: 6px 0; }
+                          .totals-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+                          .items-table { width: 100%; border-collapse: collapse; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="text-center">
+                          <span class="bold" style="font-size: 11px;">${settings?.storeName || 'ROSTICERÍAS EL PECHUGÓN'}</span><br/>
+                          <span class="bold" style="font-size: 10px;">REPORTE DE CORTE DE CAJA</span>
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <div>
+                          <strong>FOLIO CORTE:</strong> ${showCutReceipt.id}<br/>
+                          <strong>FECHA CIERRE:</strong> ${formattedDate}<br/>
+                          <strong>ENCARGADO:</strong> ${showCutReceipt.cashier}<br/>
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <table class="totals-table">
+                          <tr>
+                            <td style="font-family: monospace; font-size: 9px;">Fondo Inicial:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 9px;">$${showCutReceipt.initialCash.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td style="font-family: monospace; font-size: 9px;">Ventas Efectivo:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 9px;">+$${showCutReceipt.salesCash.toFixed(2)}</td>
+                          </tr>
+                          <tr class="bold">
+                            <td style="font-family: monospace; font-size: 9px;">Efectivo Esperado:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 9px;">$${showCutReceipt.expectedCash.toFixed(2)}</td>
+                          </tr>
+                          <tr class="bold">
+                            <td style="font-family: monospace; font-size: 9px;">Efectivo Declarado:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 9px;">$${showCutReceipt.actualCash.toFixed(2)}</td>
+                          </tr>
+                          <tr class="bold" style="font-size: 9px; color: #000;">
+                            <td style="font-family: monospace;">Diferencia:</td>
+                            <td class="text-right" style="font-family: monospace;">
+                              ${showCutReceipt.discrepancy === 0 ? '$0.00 (CUADRADA)' : showCutReceipt.discrepancy > 0 ? `+$${showCutReceipt.discrepancy.toFixed(2)} (SOBRANTE)` : `-$${Math.abs(showCutReceipt.discrepancy).toFixed(2)} (FALTANTE)`}
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <div class="divider"></div>
+                        
+                        <table class="totals-table">
+                          <tr>
+                            <td style="font-family: monospace; font-size: 9px;">Tarjeta (Terminal):</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 9px;">$${showCutReceipt.cardsTotal.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td style="font-family: monospace; font-size: 9px;">Transferencias:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 9px;">$${showCutReceipt.transfersTotal.toFixed(2)}</td>
+                          </tr>
+                          <tr class="bold" style="font-size: 10px;">
+                            <td style="font-family: monospace;">TOTAL VENTAS NETAS:</td>
+                            <td class="text-right" style="font-family: monospace;">$${(showCutReceipt.salesCash + showCutReceipt.cardsTotal + showCutReceipt.transfersTotal).toFixed(2)}</td>
+                          </tr>
+                        </table>
+                        
+                        <div class="divider"></div>
+                        
+                        <div class="bold" style="font-size: 9px; margin-bottom: 4px;">DETALLE DE ARTÍCULOS VENDIDOS</div>
+                        <table class="items-table">
+                          ${itemsHtml}
+                        </table>
+                        
+                        <div class="divider"></div>
+                        
+                        <table class="totals-table">
+                          <tr style="color: #000;">
+                            <td style="font-family: monospace; font-size: 9px;">Mermas / Pérdidas:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 9px;">-$${showCutReceipt.totalMermas.toFixed(2)}</td>
+                          </tr>
+                        </table>
+                        
+                        ${showCutReceipt.notes ? `
+                          <div class="divider"></div>
+                          <div style="font-size: 9px; font-family: monospace;">
+                            <strong>Notas:</strong> ${showCutReceipt.notes}
+                          </div>
+                        ` : ''}
+                        
+                        <div class="divider"></div>
+                        
+                        <div class="text-center" style="margin-top: 15px; font-size: 10px;">
+                          ___________________________<br/>
+                          Firma del Encargado
+                        </div>
+                        
+                        <div style="height: 35px;"></div>
+                      </body>
+                    </html>
+                  `);
+                  doc.close();
+
+                  iframe.contentWindow.focus();
+                  setTimeout(() => {
+                    iframe.contentWindow.print();
+                    setTimeout(() => {
+                      document.body.removeChild(iframe);
+                    }, 1000);
+                  }, 250);
+
+                  showToast('Enviando reporte de corte a impresora térmica', 'success');
+                } catch (err) {
+                  console.error(err);
+                  showToast('Error al imprimir reporte', 'error');
+                }
               }} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <PrintIcon size={16} /> Imprimir Reporte
               </button>

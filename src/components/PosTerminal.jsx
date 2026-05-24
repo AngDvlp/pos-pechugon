@@ -848,7 +848,136 @@ export default function PosTerminal({
 
             <div style={styles.ticketActions}>
               <button className="btn btn-secondary" onClick={() => {
-                showToast('Ticket enviado a impresora (Simulación)', 'success');
+                try {
+                  const iframe = document.createElement('iframe');
+                  iframe.style.position = 'fixed';
+                  iframe.style.right = '0';
+                  iframe.style.bottom = '0';
+                  iframe.style.width = '0';
+                  iframe.style.height = '0';
+                  iframe.style.border = '0';
+                  document.body.appendChild(iframe);
+
+                  const doc = iframe.contentWindow.document;
+                  const formattedDate = new Date(receipt.date).toLocaleString('es-MX', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                  });
+
+                  const itemsHtml = receipt.items.map(item => `
+                    <tr>
+                      <td style="padding: 3px 0; font-family: monospace; font-size: 11px;">
+                        ${item.name.toUpperCase()}<br/>
+                        ${item.quantity} x $${item.price.toFixed(2)}
+                      </td>
+                      <td style="text-align: right; vertical-align: top; padding: 3px 0; font-family: monospace; font-size: 11px;">
+                        $${(item.price * item.quantity).toFixed(2)}
+                      </td>
+                    </tr>
+                  `).join('');
+
+                  doc.write(`
+                    <html>
+                      <head>
+                        <title>Imprimir Ticket</title>
+                        <style>
+                          @page { margin: 0; size: auto; }
+                          body {
+                            font-family: 'Courier New', Courier, monospace;
+                            width: 58mm; /* standard 58mm thermal print width */
+                            margin: 0;
+                            padding: 4px;
+                            color: #000;
+                            font-size: 11px;
+                            line-height: 1.2;
+                          }
+                          .text-center { text-align: center; }
+                          .text-right { text-align: right; }
+                          .bold { font-weight: bold; }
+                          .divider { border-top: 1px dashed #000; margin: 6px 0; }
+                          .totals-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+                          .items-table { width: 100%; border-collapse: collapse; }
+                          .success-text { font-size: 10px; font-weight: bold; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="text-center">
+                          <span class="bold" style="font-size: 12px;">${settings?.storeName || 'ROSTICERÍAS EL PECHUGÓN'}</span><br/>
+                          <span style="font-size: 9px;">${settings?.storeAddress || ''}</span><br/>
+                          <span style="font-size: 9px;">RFC: ${settings?.storeRfc || ''}</span>
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <div>
+                          <strong>TICKET:</strong> ${receipt.id}<br/>
+                          <strong>FECHA:</strong> ${formattedDate}<br/>
+                          <strong>CAJERO:</strong> ${receipt.cashier}<br/>
+                          <strong>CLIENTE:</strong> ${receipt.customerName}
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <table class="items-table">
+                          ${itemsHtml}
+                        </table>
+                        
+                        <div class="divider"></div>
+                        
+                        <table class="totals-table">
+                          <tr>
+                            <td style="font-family: monospace; font-size: 11px;">Subtotal:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 11px;">$${receipt.subtotal.toFixed(2)}</td>
+                          </tr>
+                          <tr>
+                            <td style="font-family: monospace; font-size: 11px;">IVA (${settings?.taxRate || 16}%):</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 11px;">$${receipt.tax.toFixed(2)}</td>
+                          </tr>
+                          ${receipt.discount > 0 ? `
+                          <tr>
+                            <td style="font-family: monospace; font-size: 11px;">Descuento:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 11px;">-$${receipt.discount.toFixed(2)}</td>
+                          </tr>
+                          ` : ''}
+                          <tr class="bold">
+                            <td style="font-family: monospace; font-size: 12px;">TOTAL:</td>
+                            <td class="text-right" style="font-family: monospace; font-size: 12px;">$${receipt.total.toFixed(2)}</td>
+                          </tr>
+                        </table>
+                        
+                        <div class="divider"></div>
+                        
+                        <div>
+                          <strong>PAGO:</strong> ${receipt.paymentMethod.toUpperCase()}<br/>
+                          ${receipt.pointsEarned > 0 ? `<span class="success-text">PUNTOS GANADOS: +${receipt.pointsEarned} pts</span><br/>` : ''}
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <div class="text-center" style="margin-top: 6px; font-size: 10px;">
+                          ¡GRACIAS POR SU COMPRA!<br/>
+                          ROSTICERÍAS "EL PECHUGÓN"
+                        </div>
+                        
+                        <div style="height: 35px;"></div>
+                      </body>
+                    </html>
+                  `);
+                  doc.close();
+
+                  iframe.contentWindow.focus();
+                  setTimeout(() => {
+                    iframe.contentWindow.print();
+                    setTimeout(() => {
+                      document.body.removeChild(iframe);
+                    }, 1000);
+                  }, 250);
+
+                  showToast('Enviando ticket a impresora térmica', 'success');
+                } catch (err) {
+                  console.error(err);
+                  showToast('Error al imprimir ticket', 'error');
+                }
               }} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <PrintIcon size={16} /> Imprimir Ticket
               </button>

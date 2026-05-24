@@ -478,6 +478,7 @@ function App() {
             transactions={transactions}
             mermas={mermas}
             showToast={showToast}
+            settings={settings}
           />
         );
       case 'stock_declaration':
