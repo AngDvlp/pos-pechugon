@@ -19,5 +19,18 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- Script de registro directo para detección estática en PWABuilder -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then(function(reg) {
+            console.log('Service Worker registrado con éxito:', reg.scope);
+          })
+          .catch(function(err) {
+            console.error('Error al registrar el Service Worker:', err);
+          });
+      }
+    </script>
   </body>
 </html>
