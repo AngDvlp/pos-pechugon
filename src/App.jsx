@@ -18,6 +18,7 @@ import {
   initialCashCuts, 
   initialMermas 
 } from './data/mockData';
+import { sha256 } from './utils/security';
 
 // Generadores de IDs definidos fuera del componente para cumplir con las reglas de pureza de React 19
 const generateToastId = () => Date.now() + Math.random().toString(36).substring(2, 9);
@@ -39,9 +40,9 @@ function App() {
     }
   };
 
-  // Purga única para producción: deja todo en ceros (existencias, transacciones, cortes, mermas, clientes ficticios)
+  // Purga única para producción: deja todo en ceros y migra a PINs cifrados asíncronos
   try {
-    const isCleared = localStorage.getItem('pos_prod_cleared_v1');
+    const isCleared = localStorage.getItem('pos_prod_cleared_v2');
     if (!isCleared) {
       localStorage.removeItem('pos_products');
       localStorage.removeItem('pos_transactions');
@@ -51,7 +52,7 @@ function App() {
       localStorage.removeItem('pos_users');
       localStorage.removeItem('pos_active_session');
       localStorage.removeItem('pos_current_user');
-      localStorage.setItem('pos_prod_cleared_v1', 'true');
+      localStorage.setItem('pos_prod_cleared_v2', 'true');
     }
   } catch (e) {
     console.error('Error al realizar la purga de localStorage', e);
@@ -64,7 +65,7 @@ function App() {
     const loaded = getLocalData('pos_users', initialUsers);
     const hasBranchUsers = loaded.some(u => u.name === 'Sucursal San Francisco' || u.name === 'Pechumóvil');
     const adminUser = loaded.find(u => u.id === 'u-1');
-    const hasNewAdminPassword = adminUser && adminUser.pin === 'PechugonAdmin2026';
+    const hasNewAdminPassword = adminUser && adminUser.pin === 'bf2bce7cd3291110cfc64e1e31a92a5b21811ed98a327a6c2677ba195b84851a';
     
     if (!hasBranchUsers || !hasNewAdminPassword) {
       try {
@@ -248,67 +249,79 @@ function App() {
     setLoginError(false);
   };
 
-  const validatePin = (pin) => {
+  const validatePin = async (pin) => {
     if (lockoutTime) return;
     
-    // Only allow 'encargado' (sucursales) on the PIN keypad
-    const foundUser = users.find(u => u.pin === pin && u.role === 'encargado');
-    if (foundUser) {
-      setCurrentUser(foundUser);
-      setPinInput('');
-      setLoginError(false);
-      setFailedAttempts(0);
-      setActiveView('pos');
-      showToast(`Sesión iniciada: Bienvenido ${foundUser.name}`, 'success');
-    } else {
-      setLoginError(true);
-      setPinInput('');
-      const newAttempts = failedAttempts + 1;
-      setFailedAttempts(newAttempts);
-      
-      if (newAttempts >= 3) {
-        const lockUntil = calculateLockoutTime(30);
-        setLockoutTime(lockUntil);
-        setTimeRemaining(30);
-        showToast('Demasiados intentos fallidos. Bloqueo temporal por 30 segundos.', 'error');
+    try {
+      const hashedPin = await sha256(pin);
+      // Only allow 'encargado' (sucursales) on the PIN keypad
+      const foundUser = users.find(u => u.pin === hashedPin && u.role === 'encargado');
+      if (foundUser) {
+        setCurrentUser(foundUser);
+        setPinInput('');
+        setLoginError(false);
+        setFailedAttempts(0);
+        setActiveView('pos');
+        showToast(`Sesión iniciada: Bienvenido ${foundUser.name}`, 'success');
       } else {
-        showToast(`PIN incorrecto. Intentos: ${newAttempts}/3`, 'error');
+        setLoginError(true);
+        setPinInput('');
+        const newAttempts = failedAttempts + 1;
+        setFailedAttempts(newAttempts);
+        
+        if (newAttempts >= 3) {
+          const lockUntil = calculateLockoutTime(30);
+          setLockoutTime(lockUntil);
+          setTimeRemaining(30);
+          showToast('Demasiados intentos fallidos. Bloqueo temporal por 30 segundos.', 'error');
+        } else {
+          showToast(`PIN incorrecto. Intentos: ${newAttempts}/3`, 'error');
+        }
+        
+        // Shake animation trigger
+        setTimeout(() => setLoginError(false), 500);
       }
-      
-      // Shake animation trigger
-      setTimeout(() => setLoginError(false), 500);
+    } catch (e) {
+      console.error(e);
+      showToast('Error de seguridad al validar PIN', 'error');
     }
   };
 
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     if (e) e.preventDefault();
     if (lockoutTime) return;
 
-    // Only allow 'supervisor' (administración) on the password screen
-    const foundUser = users.find(u => u.role === 'supervisor' && u.pin === passwordInput);
-    if (foundUser) {
-      setCurrentUser(foundUser);
-      setPasswordInput('');
-      setLoginError(false);
-      setFailedAttempts(0);
-      setActiveView('dashboard');
-      showToast(`Sesión iniciada: Administración`, 'success');
-    } else {
-      setLoginError(true);
-      const newAttempts = failedAttempts + 1;
-      setFailedAttempts(newAttempts);
-      
-      if (newAttempts >= 3) {
-        const lockUntil = calculateLockoutTime(30);
-        setLockoutTime(lockUntil);
-        setTimeRemaining(30);
-        showToast('Demasiados intentos fallidos. Bloqueo temporal por 30 segundos.', 'error');
+    try {
+      const hashedInput = await sha256(passwordInput);
+      // Only allow 'supervisor' (administración) on the password screen
+      const foundUser = users.find(u => u.role === 'supervisor' && u.pin === hashedInput);
+      if (foundUser) {
+        setCurrentUser(foundUser);
+        setPasswordInput('');
+        setLoginError(false);
+        setFailedAttempts(0);
+        setActiveView('dashboard');
+        showToast(`Sesión iniciada: Administración`, 'success');
       } else {
-        showToast(`Contraseña incorrecta. Intentos: ${newAttempts}/3`, 'error');
+        setLoginError(true);
+        const newAttempts = failedAttempts + 1;
+        setFailedAttempts(newAttempts);
+        
+        if (newAttempts >= 3) {
+          const lockUntil = calculateLockoutTime(30);
+          setLockoutTime(lockUntil);
+          setTimeRemaining(30);
+          showToast('Demasiados intentos fallidos. Bloqueo temporal por 30 segundos.', 'error');
+        } else {
+          showToast(`Contraseña incorrecta. Intentos: ${newAttempts}/3`, 'error');
+        }
+        
+        // Shake animation trigger
+        setTimeout(() => setLoginError(false), 500);
       }
-      
-      // Shake animation trigger
-      setTimeout(() => setLoginError(false), 500);
+    } catch (e) {
+      console.error(e);
+      showToast('Error de seguridad al validar contraseña', 'error');
     }
   };
 

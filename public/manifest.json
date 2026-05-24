@@ -1,0 +1,25 @@
+{
+  "short_name": "Pechugón POS",
+  "name": "Rosticerías El Pechugón - POS",
+  "description": "Punto de Venta Premium para Rosticerías El Pechugón. Optimizado para tablets y funcionamiento offline.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0a0e1a",
+  "theme_color": "#f59e0b",
+  "display": "standalone",
+  "orientation": "landscape",
+  "prefer_related_applications": false
+}

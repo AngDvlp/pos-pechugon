@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PlusIcon, CloseIcon } from './UI/Icons';
+import { sha256 } from '../utils/security';
 
 export default function Users({ users, setUsers, showToast }) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -7,7 +8,7 @@ export default function Users({ users, setUsers, showToast }) {
   const [role, setRole] = useState('encargado');
   const [pin, setPin] = useState('');
 
-  const handleCreateUser = (e) => {
+  const handleCreateUser = async (e) => {
     e.preventDefault();
     
     if (!name || !pin) {
@@ -27,8 +28,18 @@ export default function Users({ users, setUsers, showToast }) {
       }
     }
 
-    // Check PIN/password uniqueness
-    const pinConflict = users.find(u => u.pin === pin);
+    // Encrypt the pin using SHA-256 for local storage security
+    let hashedPin;
+    try {
+      hashedPin = await sha256(pin);
+    } catch (err) {
+      console.error(err);
+      showToast('Error al procesar el PIN de seguridad', 'error');
+      return;
+    }
+
+    // Check PIN/password uniqueness using the hash
+    const pinConflict = users.find(u => u.pin === hashedPin);
     if (pinConflict) {
       showToast(role === 'encargado' ? 'Este PIN ya está en uso por otra sucursal' : 'Esta contraseña ya está en uso', 'error');
       return;
@@ -38,7 +49,7 @@ export default function Users({ users, setUsers, showToast }) {
       id: 'u-' + Date.now(),
       name,
       role,
-      pin
+      pin: hashedPin
     };
 
     setUsers([...users, newUser]);

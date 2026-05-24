@@ -209,19 +209,19 @@ export const initialUsers = [
     id: 'u-1',
     name: 'Administración',
     role: 'supervisor',
-    pin: 'PechugonAdmin2026'
+    pin: 'bf2bce7cd3291110cfc64e1e31a92a5b21811ed98a327a6c2677ba195b84851a'
   },
   {
     id: 'u-2',
     name: 'Sucursal San Francisco',
     role: 'encargado',
-    pin: '4321'
+    pin: 'fe2592b42a727e977f055947385b709cc82b16b9a87f88c6abf3900d65d0cdc3'
   },
   {
     id: 'u-3',
     name: 'Pechumóvil',
     role: 'encargado',
-    pin: '2580'
+    pin: 'ed946f65d2c785d90e827c5ffd879ce3b49c68d4c88013074176a7e73bc58bcf'
   }
 ];
 
