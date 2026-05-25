@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PlusIcon, CloseIcon, TrashIcon, EditIcon, AlertIcon } from './UI/Icons';
+import { getEffectiveStock, adjustProductStock } from '../utils/inventory';
 
 export default function Inventory({ products, setProducts, categories, registerMerma, showToast }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,13 +27,7 @@ export default function Inventory({ products, setProducts, categories, registerM
   const [mermaReason, setMermaReason] = useState('dañado');
 
   const getProductStock = (product) => {
-    if (product.isCombo) {
-      return Math.min(...product.components.map(comp => {
-        const p = products.find(prod => prod.sku === comp.sku);
-        return p ? Math.floor(p.stock / comp.quantity) : 0;
-      }));
-    }
-    return product.stock;
+    return getEffectiveStock(product, products);
   };
 
   // Filter products
@@ -92,10 +87,11 @@ export default function Inventory({ products, setProducts, categories, registerM
       category: formCategory,
       cost: parseFloat(formCost),
       price: parseFloat(formPrice),
-      stock: editingProduct?.isCombo ? 0 : parseInt(formStock || 0),
+      stock: editingProduct?.isCombo || editingProduct?.baseProductSku ? 0 : parseFloat(formStock || 0),
       minStock: parseInt(formMinStock || 0),
       color: formColor,
-      ...(editingProduct?.isCombo ? { isCombo: true, components: editingProduct.components } : {})
+      ...(editingProduct?.isCombo ? { isCombo: true, components: editingProduct.components } : {}),
+      ...(editingProduct?.baseProductSku ? { baseProductSku: editingProduct.baseProductSku, baseEquivalence: editingProduct.baseEquivalence } : {})
     };
 
     if (editingProduct) {
@@ -153,14 +149,16 @@ export default function Inventory({ products, setProducts, categories, registerM
 
   // Inline Quick Stock Adjustments
   const adjustStock = (sku, amount) => {
-    const updated = products.map(p => {
-      if (p.sku === sku) {
-        const newStock = Math.max(0, p.stock + amount);
-        showToast(`Stock ajustado de '${p.name}': ${newStock}`, 'success');
-        return { ...p, stock: newStock };
-      }
-      return p;
-    });
+    const updated = adjustProductStock(products, sku, amount);
+    const updatedProduct = updated.find(p => p.sku === sku);
+    if (!updatedProduct) return;
+    
+    if (updatedProduct.baseProductSku) {
+      const baseProduct = updated.find(p => p.sku === updatedProduct.baseProductSku);
+      showToast(`Stock de '${updatedProduct.name}' ajustado (Base '${baseProduct.name}': ${baseProduct.stock})`, 'success');
+    } else {
+      showToast(`Stock ajustado de '${updatedProduct.name}': ${updatedProduct.stock}`, 'success');
+    }
     setProducts(updated);
   };
 
@@ -418,12 +416,19 @@ export default function Inventory({ products, setProducts, categories, registerM
                   <label>Stock Inicial *</label>
                   <input
                     type="number"
+                    step="any"
                     className="input-field"
-                    value={editingProduct?.isCombo ? "" : formStock}
+                    value={editingProduct?.isCombo || editingProduct?.baseProductSku ? "" : formStock}
                     onChange={(e) => setFormStock(e.target.value)}
-                    placeholder={editingProduct?.isCombo ? "Calculado de ingredientes" : "0"}
-                    disabled={editingProduct?.isCombo === true}
-                    required={!editingProduct?.isCombo}
+                    placeholder={
+                      editingProduct?.isCombo 
+                        ? "Calculado de ingredientes" 
+                        : editingProduct?.baseProductSku 
+                          ? "Calculado de producto base" 
+                          : "0"
+                    }
+                    disabled={editingProduct?.isCombo === true || editingProduct?.baseProductSku !== undefined}
+                    required={!editingProduct?.isCombo && !editingProduct?.baseProductSku}
                   />
                 </div>
 

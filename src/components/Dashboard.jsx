@@ -23,6 +23,7 @@ ChartJS.register(
 );
 
 import { AlertIcon, CheckIcon } from './UI/Icons';
+import { getEffectiveStock } from '../utils/inventory';
 
 export default function Dashboard({ transactions, mermas, products }) {
   // Filter for completed transactions only
@@ -43,8 +44,8 @@ export default function Dashboard({ transactions, mermas, products }) {
   
   const totalMermaLoss = mermas.reduce((sum, m) => sum + m.totalLoss, 0);
 
-  // Stock alerts
-  const lowStockProducts = products.filter(p => p.stock <= p.minStock);
+  // Stock alerts - filter out combos and derived products to keep warnings clean and non-redundant
+  const lowStockProducts = products.filter(p => !p.isCombo && !p.baseProductSku && getEffectiveStock(p, products) <= p.minStock);
 
   // 1. Line Chart Data: Sales in the last 7 days
   const getSalesHistoryData = () => {
@@ -302,12 +303,13 @@ export default function Dashboard({ transactions, mermas, products }) {
               </thead>
               <tbody>
                 {lowStockProducts.map(p => {
-                  const isOut = p.stock === 0;
+                  const effectiveStock = getEffectiveStock(p, products);
+                  const isOut = effectiveStock === 0;
                   return (
                     <tr key={p.sku}>
                       <td style={{ fontWeight: '600' }}>{p.name}</td>
                       <td style={{ textAlign: 'center', fontWeight: '700', color: isOut ? 'var(--danger)' : 'var(--warning)' }}>
-                        {p.stock}
+                        {effectiveStock}
                       </td>
                       <td style={{ textAlign: 'center' }}>{p.minStock}</td>
                       <td>

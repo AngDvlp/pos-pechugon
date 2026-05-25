@@ -16,12 +16,12 @@ export default function StockDeclaration({ products, setProducts, showToast }) {
 
   // Filter products to show only relevant ones (Prepared food & sides & drinks)
   const filteredProducts = products.filter(p => {
-    return !p.isCombo && (selectedCategory === 'all' || p.category === selectedCategory);
+    return !p.isCombo && !p.baseProductSku && (selectedCategory === 'all' || p.category === selectedCategory);
   });
 
   // Handle value change for a specific SKU
   const handleQtyChange = (sku, val) => {
-    const parsed = parseInt(val);
+    const parsed = parseFloat(val);
     setQuantities(prev => ({
       ...prev,
       [sku]: isNaN(parsed) ? '' : Math.max(0, parsed)
@@ -53,7 +53,7 @@ export default function StockDeclaration({ products, setProducts, showToast }) {
     const updatedProducts = products.map(p => {
       const inputVal = quantities[p.sku];
       if (inputVal !== undefined && inputVal !== '') {
-        const qty = parseInt(inputVal);
+        const qty = parseFloat(inputVal);
         const newStock = saveMode === 'set' ? qty : p.stock + qty;
         return {
           ...p,
@@ -222,6 +222,7 @@ export default function StockDeclaration({ products, setProducts, showToast }) {
                   
                   <input
                     type="number"
+                    step="any"
                     min="0"
                     placeholder="0"
                     value={inputValue}

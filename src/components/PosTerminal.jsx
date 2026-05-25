@@ -15,6 +15,7 @@ import {
   TransferIcon,
   ArrowRightIcon
 } from './UI/Icons';
+import { getEffectiveStock, adjustProductStock } from '../utils/inventory';
 
 const generateTransactionId = () => 'T-' + Math.floor(1000 + Math.random() * 9000);
 
@@ -88,13 +89,7 @@ export default function PosTerminal({
   };
 
   const getProductStock = (product) => {
-    if (product.isCombo) {
-      return Math.min(...product.components.map(comp => {
-        const p = products.find(prod => prod.sku === comp.sku);
-        return p ? Math.floor(p.stock / comp.quantity) : 0;
-      }));
-    }
-    return product.stock;
+    return getEffectiveStock(product, products);
   };
 
   // Add item to cart
@@ -213,29 +208,9 @@ export default function PosTerminal({
     };
 
     // Update inventory stock levels
-    const updatedProducts = products.map(product => {
-      let deductedStock = 0;
-      cart.forEach(item => {
-        // If it's the product itself, deduct its quantity
-        if (item.product.sku === product.sku) {
-          deductedStock += item.quantity;
-        }
-        // If it's a combo, check if this product is one of its components
-        if (item.product.isCombo) {
-          const comp = item.product.components.find(c => c.sku === product.sku);
-          if (comp) {
-            deductedStock += comp.quantity * item.quantity;
-          }
-        }
-      });
-
-      if (deductedStock > 0) {
-        return {
-          ...product,
-          stock: Math.max(0, product.stock - deductedStock)
-        };
-      }
-      return product;
+    let updatedProducts = [...products];
+    cart.forEach(item => {
+      updatedProducts = adjustProductStock(updatedProducts, item.product.sku, -item.quantity);
     });
 
     // Update Customer loyalty points (1 point per 10 currency spent)

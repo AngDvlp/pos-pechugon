@@ -19,6 +19,7 @@ import {
   initialMermas 
 } from './data/mockData';
 import { sha256 } from './utils/security';
+import { adjustProductStock } from './utils/inventory';
 
 // Generadores de IDs definidos fuera del componente para cumplir con las reglas de pureza de React 19
 const generateToastId = () => Date.now() + Math.random().toString(36).substring(2, 9);
@@ -373,30 +374,9 @@ function App() {
     // Find the refunded transaction to restore items stock
     const tx = transactions.find(t => t.id === txId);
     if (tx) {
-      const restocks = {};
-
+      let updatedProducts = [...products];
       tx.items.forEach(item => {
-        const catalogProduct = products.find(p => p.sku === item.sku);
-        if (catalogProduct && catalogProduct.isCombo) {
-          // If it was a combo, restock its components
-          catalogProduct.components.forEach(comp => {
-            restocks[comp.sku] = (restocks[comp.sku] || 0) + (comp.quantity * item.quantity);
-          });
-        } else {
-          // Normal product
-          restocks[item.sku] = (restocks[item.sku] || 0) + item.quantity;
-        }
-      });
-
-      const updatedProducts = products.map(product => {
-        const addQty = restocks[product.sku];
-        if (addQty) {
-          return {
-            ...product,
-            stock: product.stock + addQty
-          };
-        }
-        return product;
+        updatedProducts = adjustProductStock(updatedProducts, item.sku, item.quantity);
       });
       setProducts(updatedProducts);
     }
@@ -425,15 +405,7 @@ function App() {
     };
 
     // Deduct inventory stock
-    const updatedProducts = products.map(p => {
-      if (p.sku === sku) {
-        return {
-          ...p,
-          stock: Math.max(0, p.stock - qty)
-        };
-      }
-      return p;
-    });
+    const updatedProducts = adjustProductStock(products, sku, -qty);
 
     setProducts(updatedProducts);
     setMermas([newMerma, ...mermas]);
