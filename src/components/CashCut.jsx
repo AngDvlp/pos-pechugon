@@ -84,13 +84,90 @@ export default function CashCut({
 
     const countedCash = parseFloat(actualCashInput);
     
-    // Calculate auto-mermas for remaining stock
+    // Calculate auto-mermas and convert remaining chicken to tacos, age salads
     const autoMermas = [];
+    const nowStr = new Date().toISOString();
+    
+    // Get pechugon stock to convert (1 Pechugón -> 8 Tacos)
+    const pechugonProduct = products.find(p => p.sku === 'B-001');
+    const pechugonStock = pechugonProduct ? pechugonProduct.stock : 0;
+    const convertedTacosQty = pechugonStock * 8;
+
     const updatedProducts = products.map(p => {
-      if (!p.isCombo && !p.baseProductSku && p.stock > 0) {
+      if (p.isCombo || p.baseProductSku) {
+        return p;
+      }
+      
+      // PECHUGÓN (B-001) leftover chicken conversion
+      if (p.sku === 'B-001') {
+        return {
+          ...p,
+          stock: 0
+        };
+      }
+      
+      // SALADS (C-003, C-004) shelf life logic
+      if (p.sku === 'C-003' || p.sku === 'C-004') {
+        let batches = p.saladBatches ? p.saladBatches.map(b => ({ ...b })) : [];
+        if (batches.length === 0 && p.stock > 0) {
+          batches = [{ quantity: p.stock, age: 0 }];
+        }
+        
+        // Age each batch by 1 day
+        batches = batches.map(b => ({ ...b, age: b.age + 1 }));
+        
+        // Find expired batches (age >= 3)
+        const expiredBatches = batches.filter(b => b.age >= 3);
+        const nonExpiredBatches = batches.filter(b => b.age < 3);
+        
+        expiredBatches.forEach(eb => {
+          autoMermas.push({
+            id: 'M-' + Date.now() + '-EXP-' + p.sku + '-' + Math.floor(Math.random() * 1000),
+            date: nowStr,
+            sku: p.sku,
+            name: p.name,
+            quantity: eb.quantity,
+            cost: p.cost,
+            totalLoss: eb.quantity * p.cost,
+            reason: 'Expirado (Vida útil de 3 días)',
+            cashier: currentUser?.name || 'Cajero'
+          });
+        });
+        
+        const newStock = nonExpiredBatches.reduce((sum, b) => sum + b.quantity, 0);
+        return {
+          ...p,
+          saladBatches: nonExpiredBatches,
+          stock: Math.round(newStock * 1000) / 1000
+        };
+      }
+      
+      // TACO (B-006): Wipe current taco stock to merma, and add converted tacos!
+      if (p.sku === 'B-006') {
+        if (p.stock > 0) {
+          autoMermas.push({
+            id: 'M-' + Date.now() + '-' + p.sku,
+            date: nowStr,
+            sku: p.sku,
+            name: p.name,
+            quantity: p.stock,
+            cost: p.cost,
+            totalLoss: p.stock * p.cost,
+            reason: 'No vendido (Cierre de caja)',
+            cashier: currentUser?.name || 'Cajero'
+          });
+        }
+        return {
+          ...p,
+          stock: convertedTacosQty
+        };
+      }
+      
+      // OTHER products: Wipe to 0 and register as merma
+      if (p.stock > 0) {
         autoMermas.push({
           id: 'M-' + Date.now() + '-' + p.sku,
-          date: new Date().toISOString(),
+          date: nowStr,
           sku: p.sku,
           name: p.name,
           quantity: p.stock,
@@ -104,6 +181,7 @@ export default function CashCut({
           stock: 0
         };
       }
+      
       return p;
     });
 

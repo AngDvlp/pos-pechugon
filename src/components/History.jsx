@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CloseIcon, HistoryIcon, CashCutIcon, CashIcon, CardIcon, TransferIcon, RefundIcon } from './UI/Icons';
+import { CloseIcon, HistoryIcon, CashCutIcon, CashIcon, CardIcon, TransferIcon, RefundIcon, FoodIcon } from './UI/Icons';
 
 const getShortName = (name) => {
   if (!name) return '';
@@ -14,7 +14,8 @@ export default function History({
   refundTransaction, 
   cashCuts, 
   showToast,
-  settings
+  settings,
+  kitchenBatches = []
 }) {
   const [activeTab, setActiveTab] = useState('sales'); // 'sales' or 'cuts'
   
@@ -81,6 +82,19 @@ export default function History({
           }}
         >
           <CashCutIcon size={18} /> Cortes de Caja Realizados
+        </button>
+        <button
+          onClick={() => setActiveTab('kitchen')}
+          style={{
+            ...styles.tabBtn,
+            borderBottomColor: activeTab === 'kitchen' ? 'var(--accent)' : 'transparent',
+            color: activeTab === 'kitchen' ? 'var(--accent)' : 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <FoodIcon size={18} /> Historial de Cocina
         </button>
       </div>
 
@@ -248,6 +262,71 @@ export default function History({
                   <tr>
                     <td colSpan="10" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
                       No se han realizado cierres de caja todavía.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* KITCHEN BATCHES TAB */}
+      {activeTab === 'kitchen' && (
+        <div>
+          <div className="table-wrap" style={{ marginTop: '20px' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID Tanda</th>
+                  <th>Fecha Inicio</th>
+                  <th>Producto</th>
+                  <th style={{ textAlign: 'center' }}>Cantidad</th>
+                  <th>Tiempo Espera</th>
+                  <th>Terminado a las</th>
+                  <th style={{ textAlign: 'center' }}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kitchenBatches.map(batch => {
+                  const startTime = new Date(batch.startedAt).toLocaleString();
+                  const endTime = batch.completedAt ? new Date(batch.completedAt).toLocaleString() : 'N/A';
+                  
+                  // Calculate wait duration in minutes
+                  const start = new Date(batch.startedAt);
+                  const end = new Date(batch.readyAt);
+                  const waitMinutes = Math.round((end - start) / 60000);
+
+                  return (
+                    <tr key={batch.id}>
+                      <td style={{ fontWeight: '700', fontFamily: 'monospace' }}>{batch.id}</td>
+                      <td>{startTime}</td>
+                      <td style={{ fontWeight: '600' }}>{batch.name}</td>
+                      <td style={{ textAlign: 'center', fontWeight: '700' }}>{batch.quantity} pzas</td>
+                      <td>{waitMinutes} min</td>
+                      <td>{endTime}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className={`badge ${
+                          batch.status === 'cooking' 
+                            ? 'badge-warning' 
+                            : batch.status === 'ready' 
+                              ? 'badge-success' 
+                              : 'badge-info'
+                        }`}>
+                          {batch.status === 'cooking' 
+                            ? 'Cocinando' 
+                            : batch.status === 'ready' 
+                              ? 'Listo (Automático)' 
+                              : 'Listo (Forzado)'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {kitchenBatches.length === 0 && (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                      No se han registrado tandas de cocina todavía.
                     </td>
                   </tr>
                 )}

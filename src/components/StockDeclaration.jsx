@@ -1,7 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FoodIcon, PlusIcon, MinusIcon, CheckIcon, RefreshIcon } from './UI/Icons';
 
-export default function StockDeclaration({ products, setProducts, showToast, transactions = [], registerMerma }) {
+export default function StockDeclaration({ 
+  products, 
+  setProducts, 
+  showToast, 
+  transactions = [], 
+  kitchenBatches = [],
+  setKitchenBatches,
+  forceReadyBatch,
+  resetDailyInventory
+}) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [quantities, setQuantities] = useState({}); // Stores input quantities per product SKU
   const [saveMode, setSaveMode] = useState('set'); // 'set' = override/set total, 'add' = add to stock
@@ -38,6 +47,33 @@ export default function StockDeclaration({ products, setProducts, showToast, tra
     }));
   };
 
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatRemainingTime = (ms) => {
+    if (ms <= 0) return '¡Listo!';
+    const totalSecs = Math.floor(ms / 1000);
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    return `${hrs > 0 ? hrs + 'h ' : ''}${mins}m ${secs}s`;
+  };
+
+  const timedSkus = ['B-001', 'B-014', 'B-015', 'B-002', 'V-004'];
+  const KITCHEN_TIMES = {
+    'B-001': 120, // Pechugón: 2h
+    'B-014': 80,  // Costilla: 1h 20m
+    'B-002': 80,  // Pescuezo: 1h 20m
+    'B-015': 30,  // Chiles: 30m
+    'V-004': 10   // Alitas: 10m
+  };
+
   // Handle Save
   const handleSaveAll = (e) => {
     e.preventDefault();
@@ -49,11 +85,57 @@ export default function StockDeclaration({ products, setProducts, showToast, tra
       return;
     }
 
+    let newKitchenBatches = [];
+    const now = Date.now();
+
     // Update global products list
     const updatedProducts = products.map(p => {
       const inputVal = quantities[p.sku];
       if (inputVal !== undefined && inputVal !== '') {
         const qty = parseFloat(inputVal);
+
+        // Kitchen Queue logic for timed products
+        if (saveMode === 'add' && timedSkus.includes(p.sku)) {
+          const cookTimeMin = KITCHEN_TIMES[p.sku];
+          const readyTime = now + cookTimeMin * 60 * 1000;
+          newKitchenBatches.push({
+            id: 'BATCH-' + Date.now() + '-' + Math.floor(100 + Math.random() * 900) + '-' + p.sku,
+            sku: p.sku,
+            name: p.name,
+            quantity: qty,
+            status: 'cooking',
+            startedAt: new Date(now).toISOString(),
+            readyAt: new Date(readyTime).toISOString(),
+            completedAt: null
+          });
+          return p; // Stock is not updated immediately
+        }
+
+        // Salad batches logic
+        if (p.sku === 'C-003' || p.sku === 'C-004') {
+          let batches = p.saladBatches ? p.saladBatches.map(b => ({ ...b })) : [];
+          if (batches.length === 0 && p.stock > 0) {
+            batches = [{ quantity: p.stock, age: 0 }];
+          }
+          if (saveMode === 'set') {
+            batches = [{ quantity: qty, age: 0 }];
+          } else {
+            const idx0 = batches.findIndex(b => b.age === 0);
+            if (idx0 >= 0) {
+              batches[idx0].quantity = Math.round((batches[idx0].quantity + qty) * 1000) / 1000;
+            } else {
+              batches.push({ quantity: qty, age: 0 });
+            }
+          }
+          const calculatedStock = batches.reduce((sum, b) => sum + b.quantity, 0);
+          return {
+            ...p,
+            saladBatches: batches,
+            stock: Math.round(calculatedStock * 1000) / 1000
+          };
+        }
+
+        // Default direct update
         const newStock = saveMode === 'set' ? qty : p.stock + qty;
         return {
           ...p,
@@ -64,13 +146,18 @@ export default function StockDeclaration({ products, setProducts, showToast, tra
     });
 
     setProducts(updatedProducts);
+    if (newKitchenBatches.length > 0) {
+      setKitchenBatches(prev => [...prev, ...newKitchenBatches]);
+      showToast(`${newKitchenBatches.length} tanda(s) enviada(s) a cocina.`, 'info');
+    } else {
+      showToast(
+        saveMode === 'set' 
+          ? 'Inventario físico establecido con éxito' 
+          : 'Producción añadida al inventario con éxito', 
+        'success'
+      );
+    }
     setQuantities({}); // Clear inputs
-    showToast(
-      saveMode === 'set' 
-        ? 'Inventario físico establecido con éxito' 
-        : 'Producción añadida al inventario con éxito', 
-      'success'
-    );
   };
 
   const handleClearInputs = () => {
@@ -78,19 +165,9 @@ export default function StockDeclaration({ products, setProducts, showToast, tra
     
     const activeProductsWithStock = products.filter(p => !p.isCombo && !p.baseProductSku && p.stock > 0);
     if (activeProductsWithStock.length > 0) {
-      if (window.confirm("¿Deseas reiniciar a 0 el stock restante en inventario (lo que no se vendió) y registrarlo como merma para iniciar un nuevo día?")) {
-        let updatedProducts = [...products];
-        activeProductsWithStock.forEach(p => {
-          registerMerma(p.sku, p.stock, "No vendido (Limpieza de cocina)");
-          updatedProducts = updatedProducts.map(prod => {
-            if (prod.sku === p.sku) {
-              return { ...prod, stock: 0 };
-            }
-            return prod;
-          });
-        });
-        setProducts(updatedProducts);
-        showToast("Inventario reiniciado a 0 y mermas registradas con éxito", "success");
+      if (window.confirm("¿Deseas reiniciar a 0 el stock restante en inventario (lo que no se vendió, excepto ensaladas que envejecen y pollo convertido a tacos) para iniciar un nuevo día?")) {
+        resetDailyInventory("No vendido (Limpieza de cocina)");
+        showToast("Inventario de cocina reiniciado: sobrantes a merma, pollo convertido a tacos y ensaladas envejecidas.", "success");
       }
     }
   };
@@ -164,6 +241,59 @@ export default function StockDeclaration({ products, setProducts, showToast, tra
           </div>
         </div>
       </div>
+
+      {/* Active Cooking Batches Queue Panel */}
+      {kitchenBatches.filter(b => b.status === 'cooking').length > 0 && (
+        <div className="card" style={styles.queueCard}>
+          <h3 style={styles.queueTitle}>
+            🔥 Monitoreo de Cocina (Tandas en Preparación)
+          </h3>
+          <div style={styles.queueGrid}>
+            {kitchenBatches.filter(b => b.status === 'cooking').map(batch => {
+              const start = new Date(batch.startedAt).getTime();
+              const end = new Date(batch.readyAt).getTime();
+              const total = end - start;
+              const elapsed = currentTime - start;
+              const remaining = Math.max(0, end - currentTime);
+              const progress = Math.min(100, Math.max(0, (elapsed / total) * 100));
+
+              return (
+                <div key={batch.id} style={styles.queueItem}>
+                  <div style={styles.queueItemHeader}>
+                    <span style={{ fontWeight: '700', fontSize: '15px' }}>{batch.name}</span>
+                    <span className="badge badge-warning" style={{ fontSize: '11px' }}>
+                      {batch.quantity} pzas
+                    </span>
+                  </div>
+                  
+                  {/* Countdown Timer */}
+                  <div style={styles.countdownRow}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Tiempo restante:</span>
+                    <span style={{ fontWeight: '800', color: 'var(--accent)', fontFamily: 'monospace', fontSize: '14px' }}>
+                      {formatRemainingTime(remaining)}
+                    </span>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div style={styles.progressBarContainer}>
+                    <div style={{ ...styles.progressBar, width: `${progress}%` }} />
+                  </div>
+
+                  {/* Action Button: Bajar antes (Force Ready) */}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => forceReadyBatch(batch.id)}
+                    style={{ marginTop: '12px', width: '100%', padding: '6px 12px', fontSize: '12px', fontWeight: '700' }}
+                  >
+                    Bajar antes (Autorizar)
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Category Tabs */}
       <div style={styles.tabBar}>
@@ -506,5 +636,60 @@ const styles = {
     borderRadius: 'var(--radius-sm)',
     border: '1px solid var(--border)',
     fontSize: '13px'
+  },
+  queueCard: {
+    padding: '20px',
+    backgroundColor: 'var(--bg-secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)',
+    marginBottom: '24px'
+  },
+  queueTitle: {
+    fontSize: '15px',
+    fontWeight: '700',
+    marginBottom: '16px',
+    color: 'var(--text-primary)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  queueGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+    gap: '14px'
+  },
+  queueItem: {
+    backgroundColor: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    boxShadow: 'var(--shadow-sm)'
+  },
+  queueItemHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px'
+  },
+  countdownRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '10px'
+  },
+  progressBarContainer: {
+    backgroundColor: 'var(--border)',
+    height: '6px',
+    borderRadius: '3px',
+    overflow: 'hidden',
+    width: '100%'
+  },
+  progressBar: {
+    backgroundColor: 'var(--accent)',
+    height: '100%',
+    transition: 'width 1.5s ease-in-out'
   }
 };

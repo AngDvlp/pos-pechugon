@@ -157,6 +157,8 @@ function App() {
     taxRate: 16
   }));
 
+  const [kitchenBatches, setKitchenBatches] = useState(() => getLocalData('pos_kitchen_batches', []));
+
   // App control states
   const [currentUser, setCurrentUser] = useState(() => getLocalData('pos_current_user', null));
   const [activeView, setActiveView] = useState('pos');
@@ -227,6 +229,157 @@ function App() {
   useEffect(() => {
     localStorage.setItem('pos_current_user', JSON.stringify(currentUser));
   }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('pos_kitchen_batches', JSON.stringify(kitchenBatches));
+  }, [kitchenBatches]);
+
+  // Kitchen Background timer check
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setKitchenBatches(prevBatches => {
+        const readyBatches = prevBatches.filter(b => b.status === 'cooking' && now >= new Date(b.readyAt).getTime());
+        if (readyBatches.length === 0) return prevBatches;
+        
+        setProducts(prevProducts => {
+          let updated = [...prevProducts];
+          readyBatches.forEach(batch => {
+            updated = adjustProductStock(updated, batch.sku, batch.quantity);
+          });
+          return updated;
+        });
+
+        readyBatches.forEach(batch => {
+          showToast(`¡Tanda lista! ${batch.quantity} pzas de ${batch.name} están listas en cocina.`, 'success');
+        });
+
+        return prevBatches.map(b => {
+          if (b.status === 'cooking' && now >= new Date(b.readyAt).getTime()) {
+            return {
+              ...b,
+              status: 'ready',
+              completedAt: new Date().toISOString()
+            };
+          }
+          return b;
+        });
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const forceReadyBatch = (batchId) => {
+    setKitchenBatches(prevBatches => {
+      const batch = prevBatches.find(b => b.id === batchId && b.status === 'cooking');
+      if (!batch) return prevBatches;
+      
+      setProducts(prevProducts => adjustProductStock(prevProducts, batch.sku, batch.quantity));
+      showToast(`Autorizado: ${batch.quantity} pzas de ${batch.name} listas antes de tiempo.`, 'success');
+      
+      return prevBatches.map(b => {
+        if (b.id === batchId) {
+          return {
+            ...b,
+            status: 'forced_ready',
+            completedAt: new Date().toISOString()
+          };
+        }
+        return b;
+      });
+    });
+  };
+
+  const resetDailyInventory = (reason = "No vendido (Limpieza de cocina)") => {
+    const autoMermas = [];
+    const nowStr = new Date().toISOString();
+    
+    // Get pechugon stock to convert (1 Pechugón -> 8 Tacos)
+    const pechugonProduct = products.find(p => p.sku === 'B-001');
+    const pechugonStock = pechugonProduct ? pechugonProduct.stock : 0;
+    const convertedTacosQty = pechugonStock * 8;
+
+    const updatedProducts = products.map(p => {
+      if (p.isCombo || p.baseProductSku) return p;
+
+      if (p.sku === 'B-001') {
+        return { ...p, stock: 0 };
+      }
+
+      if (p.sku === 'C-003' || p.sku === 'C-004') {
+        let batches = p.saladBatches ? p.saladBatches.map(b => ({ ...b })) : [];
+        if (batches.length === 0 && p.stock > 0) {
+          batches = [{ quantity: p.stock, age: 0 }];
+        }
+        
+        // Age batches
+        batches = batches.map(b => ({ ...b, age: b.age + 1 }));
+        const expiredBatches = batches.filter(b => b.age >= 3);
+        const nonExpiredBatches = batches.filter(b => b.age < 3);
+
+        expiredBatches.forEach(eb => {
+          autoMermas.push({
+            id: 'M-' + Date.now() + '-EXP-' + p.sku + '-' + Math.floor(Math.random() * 1000),
+            date: nowStr,
+            sku: p.sku,
+            name: p.name,
+            quantity: eb.quantity,
+            cost: p.cost,
+            totalLoss: eb.quantity * p.cost,
+            reason: 'Expirado (Vida útil de 3 días)',
+            cashier: currentUser?.name || 'Supervisor'
+          });
+        });
+
+        const newStock = nonExpiredBatches.reduce((sum, b) => sum + b.quantity, 0);
+        return {
+          ...p,
+          saladBatches: nonExpiredBatches,
+          stock: Math.round(newStock * 1000) / 1000
+        };
+      }
+
+      if (p.sku === 'B-006') {
+        if (p.stock > 0) {
+          autoMermas.push({
+            id: 'M-' + Date.now() + '-' + p.sku,
+            date: nowStr,
+            sku: p.sku,
+            name: p.name,
+            quantity: p.stock,
+            cost: p.cost,
+            totalLoss: p.stock * p.cost,
+            reason: reason,
+            cashier: currentUser?.name || 'Supervisor'
+          });
+        }
+        return { ...p, stock: convertedTacosQty };
+      }
+
+      if (p.stock > 0) {
+        autoMermas.push({
+          id: 'M-' + Date.now() + '-' + p.sku,
+          date: nowStr,
+          sku: p.sku,
+          name: p.name,
+          quantity: p.stock,
+          cost: p.cost,
+          totalLoss: p.stock * p.cost,
+          reason: reason,
+          cashier: currentUser?.name || 'Supervisor'
+        });
+        return { ...p, stock: 0 };
+      }
+
+      return p;
+    });
+
+    setProducts(updatedProducts);
+    if (autoMermas.length > 0) {
+      setMermas(prev => [...autoMermas, ...prev]);
+    }
+  };
 
   // ----------------------------------------------------
   // Toast Notifications system
@@ -483,6 +636,10 @@ function App() {
             transactions={transactions}
             mermas={mermas}
             registerMerma={registerMerma}
+            kitchenBatches={kitchenBatches}
+            setKitchenBatches={setKitchenBatches}
+            forceReadyBatch={forceReadyBatch}
+            resetDailyInventory={resetDailyInventory}
           />
         );
       case 'dashboard':
@@ -520,6 +677,7 @@ function App() {
             mermas={mermas}
             showToast={showToast}
             settings={settings}
+            kitchenBatches={kitchenBatches}
           />
         );
       case 'customers':

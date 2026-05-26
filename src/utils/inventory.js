@@ -70,9 +70,50 @@ export const adjustProductStock = (products, sku, quantityChange) => {
 
   return products.map(p => {
     if (p.sku === sku) {
+      const newStockVal = Math.max(0, Math.round((p.stock + quantityChange) * 1000) / 1000);
+      
+      if (sku === 'C-003' || sku === 'C-004') {
+        let batches = p.saladBatches ? p.saladBatches.map(b => ({ ...b })) : [];
+        if (batches.length === 0 && p.stock > 0) {
+          batches = [{ quantity: p.stock, age: 0 }];
+        }
+        
+        if (quantityChange < 0) {
+          let remainingToDeduct = Math.abs(quantityChange);
+          // Sort by age descending (oldest first)
+          batches.sort((a, b) => b.age - a.age);
+          
+          for (let i = 0; i < batches.length; i++) {
+            if (remainingToDeduct <= 0) break;
+            if (batches[i].quantity >= remainingToDeduct) {
+              batches[i].quantity = Math.round((batches[i].quantity - remainingToDeduct) * 1000) / 1000;
+              remainingToDeduct = 0;
+            } else {
+              remainingToDeduct = Math.round((remainingToDeduct - batches[i].quantity) * 1000) / 1000;
+              batches[i].quantity = 0;
+            }
+          }
+          batches = batches.filter(b => b.quantity > 0);
+        } else if (quantityChange > 0) {
+          const idx0 = batches.findIndex(b => b.age === 0);
+          if (idx0 >= 0) {
+            batches[idx0].quantity = Math.round((batches[idx0].quantity + quantityChange) * 1000) / 1000;
+          } else {
+            batches.push({ quantity: quantityChange, age: 0 });
+          }
+        }
+        
+        const calculatedStock = batches.reduce((sum, b) => sum + b.quantity, 0);
+        return {
+          ...p,
+          saladBatches: batches,
+          stock: Math.round(calculatedStock * 1000) / 1000
+        };
+      }
+      
       return {
         ...p,
-        stock: Math.max(0, Math.round((p.stock + quantityChange) * 1000) / 1000)
+        stock: newStockVal
       };
     }
     return p;
