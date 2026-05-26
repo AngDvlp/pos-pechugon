@@ -363,8 +363,14 @@ function App() {
     setCashSession(newSession);
   };
 
-  const closeSession = (cutReport) => {
+  const closeSession = (cutReport, updatedProducts, autoMermas) => {
     setCashCuts([cutReport, ...cashCuts]);
+    if (updatedProducts) {
+      setProducts(updatedProducts);
+    }
+    if (autoMermas && autoMermas.length > 0) {
+      setMermas(prev => [...autoMermas, ...prev]);
+    }
     setCashSession(null);
   };
 
@@ -464,6 +470,8 @@ function App() {
             mermas={mermas}
             showToast={showToast}
             settings={settings}
+            products={products}
+            setProducts={setProducts}
           />
         );
       case 'stock_declaration':
@@ -472,6 +480,9 @@ function App() {
             products={products}
             setProducts={setProducts}
             showToast={showToast}
+            transactions={transactions}
+            mermas={mermas}
+            registerMerma={registerMerma}
           />
         );
       case 'dashboard':

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FoodIcon, PlusIcon, MinusIcon, CheckIcon, RefreshIcon } from './UI/Icons';
 
-export default function StockDeclaration({ products, setProducts, showToast }) {
+export default function StockDeclaration({ products, setProducts, showToast, transactions = [], registerMerma }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [quantities, setQuantities] = useState({}); // Stores input quantities per product SKU
   const [saveMode, setSaveMode] = useState('set'); // 'set' = override/set total, 'add' = add to stock
@@ -75,6 +75,24 @@ export default function StockDeclaration({ products, setProducts, showToast }) {
 
   const handleClearInputs = () => {
     setQuantities({});
+    
+    const activeProductsWithStock = products.filter(p => !p.isCombo && !p.baseProductSku && p.stock > 0);
+    if (activeProductsWithStock.length > 0) {
+      if (window.confirm("¿Deseas reiniciar a 0 el stock restante en inventario (lo que no se vendió) y registrarlo como merma para iniciar un nuevo día?")) {
+        let updatedProducts = [...products];
+        activeProductsWithStock.forEach(p => {
+          registerMerma(p.sku, p.stock, "No vendido (Limpieza de cocina)");
+          updatedProducts = updatedProducts.map(prod => {
+            if (prod.sku === p.sku) {
+              return { ...prod, stock: 0 };
+            }
+            return prod;
+          });
+        });
+        setProducts(updatedProducts);
+        showToast("Inventario reiniciado a 0 y mermas registradas con éxito", "success");
+      }
+    }
   };
 
   return (
@@ -252,6 +270,44 @@ export default function StockDeclaration({ products, setProducts, showToast }) {
           );
         })}
       </div>
+
+      {/* Sales History Summary */}
+      <div className="card" style={styles.historyCard}>
+        <h3 style={styles.historyTitle}>
+          Historial de Ventas Pasadas (Referencia para Cocina)
+        </h3>
+        {transactions.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>Aún no hay ventas registradas en el sistema.</p>
+        ) : (
+          <div style={styles.historyGrid}>
+            {products.filter(p => !p.isCombo && !p.baseProductSku).map(p => {
+              // Calculate total units sold (including portions converted to base units!)
+              let totalSoldBase = 0;
+              transactions.filter(t => t.status === 'completado').forEach(t => {
+                t.items.forEach(item => {
+                  const itemProduct = products.find(prod => prod.sku === item.sku);
+                  if (itemProduct) {
+                    const itemBaseSku = itemProduct.baseProductSku || itemProduct.sku;
+                    if (itemBaseSku === p.sku) {
+                      const itemEquivalence = itemProduct.baseEquivalence || 1.0;
+                      totalSoldBase += item.quantity * itemEquivalence;
+                    }
+                  }
+                });
+              });
+
+              if (totalSoldBase === 0) return null;
+
+              return (
+                <div key={p.sku} style={styles.historyItem}>
+                  <span style={{ fontWeight: '600' }}>{p.name}</span>
+                  <span style={{ color: 'var(--accent)', fontWeight: '700' }}>{totalSoldBase} pzas vendidas</span>
+                </div>
+              );
+            }).filter(Boolean)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -421,5 +477,34 @@ const styles = {
     outline: 'none',
     WebkitAppearance: 'none',
     margin: 0
+  },
+  historyCard: {
+    marginTop: '32px',
+    padding: '20px 24px',
+    backgroundColor: 'var(--bg-secondary)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-md)'
+  },
+  historyTitle: {
+    fontSize: '16px',
+    fontWeight: '700',
+    marginBottom: '16px',
+    borderBottom: '1px solid var(--border)',
+    paddingBottom: '8px',
+    color: 'var(--text-primary)'
+  },
+  historyGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '14px'
+  },
+  historyItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '10px 14px',
+    backgroundColor: 'var(--bg-primary)',
+    borderRadius: 'var(--radius-sm)',
+    border: '1px solid var(--border)',
+    fontSize: '13px'
   }
 };

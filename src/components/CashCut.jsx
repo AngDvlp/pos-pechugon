@@ -11,7 +11,8 @@ export default function CashCut({
   transactions, 
   mermas, 
   showToast,
-  settings
+  settings,
+  products
 }) {
   const [initialCashInput, setInitialCashInput] = useState('1000.00');
   const [actualCashInput, setActualCashInput] = useState('');
@@ -50,6 +51,12 @@ export default function CashCut({
 
   // Merma calculations
   const totalMermaCost = sessionMermas.reduce((sum, m) => sum + m.totalLoss, 0);
+  const unsoldStockCost = products
+    ? products
+        .filter(p => !p.isCombo && !p.baseProductSku && p.stock > 0)
+        .reduce((sum, p) => sum + (p.stock * p.cost), 0)
+    : 0;
+  const finalMermasCost = totalMermaCost + unsoldStockCost;
 
   // Discrepancy calculations
   const actualCash = parseFloat(actualCashInput) || 0;
@@ -77,6 +84,32 @@ export default function CashCut({
 
     const countedCash = parseFloat(actualCashInput);
     
+    // Calculate auto-mermas for remaining stock
+    const autoMermas = [];
+    const updatedProducts = products.map(p => {
+      if (!p.isCombo && !p.baseProductSku && p.stock > 0) {
+        autoMermas.push({
+          id: 'M-' + Date.now() + '-' + p.sku,
+          date: new Date().toISOString(),
+          sku: p.sku,
+          name: p.name,
+          quantity: p.stock,
+          cost: p.cost,
+          totalLoss: p.stock * p.cost,
+          reason: 'No vendido (Cierre de caja)',
+          cashier: currentUser?.name || 'Cajero'
+        });
+        return {
+          ...p,
+          stock: 0
+        };
+      }
+      return p;
+    });
+
+    const autoMermasCost = autoMermas.reduce((sum, m) => sum + m.totalLoss, 0);
+    const finalMermasCostReport = totalMermaCost + autoMermasCost;
+
     // Aggregate item sales breakdown
     const salesBreakdown = [];
     const breakdownMap = {};
@@ -134,17 +167,17 @@ export default function CashCut({
       discrepancy: discrepancy,
       cardsTotal: salesCard,
       transfersTotal: salesTransfer,
-      totalMermas: totalMermaCost,
+      totalMermas: finalMermasCostReport,
       notes: notes,
       salesBreakdown: salesBreakdown,
       status: 'cerrado'
     };
 
-    closeSession(cutReport);
+    closeSession(cutReport, updatedProducts, autoMermas);
     setShowCutReceipt(cutReport);
     setActualCashInput('');
     setNotes('');
-    showToast('Caja cerrada e historial registrado', 'success');
+    showToast('Caja cerrada, inventario restante registrado como merma y stock reiniciado', 'success');
   };
 
   return (
@@ -303,11 +336,19 @@ export default function CashCut({
 
                 {/* Waste / Merma */}
                 <div style={{ ...styles.statsTableRow, marginTop: '12px', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                  <span>Mermas Registradas en Turno</span>
+                  <span style={{ color: 'var(--danger)' }}>-${totalMermaCost.toFixed(2)}</span>
+                </div>
+                <div style={styles.statsTableRow}>
+                  <span>Merma de Sobrantes (No vendido)</span>
+                  <span style={{ color: 'var(--danger)' }}>-${unsoldStockCost.toFixed(2)}</span>
+                </div>
+                <div style={{ ...styles.statsTableRow, fontWeight: '700', borderTop: '1px dashed var(--border)', paddingTop: '8px' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <TrashIcon size={16} /> Mermas de Caja
+                    <TrashIcon size={16} /> Total Mermas Cierre
                   </span>
                   <span style={{ color: 'var(--danger)', fontWeight: '600' }}>
-                    -${totalMermaCost.toFixed(2)}
+                    -${finalMermasCost.toFixed(2)}
                   </span>
                 </div>
               </div>
