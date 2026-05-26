@@ -97,7 +97,20 @@ function App() {
       }
       return initialProducts;
     }
-    return loaded;
+    // Merge new metadata properties (baseProductSku, baseEquivalence, isCombo, components) from initialProducts to prevent local storage cache mismatch
+    return loaded.map(loadedProduct => {
+      const initial = initialProducts.find(ip => ip.sku === loadedProduct.sku);
+      if (initial) {
+        return {
+          ...loadedProduct,
+          baseProductSku: initial.baseProductSku,
+          baseEquivalence: initial.baseEquivalence,
+          isCombo: initial.isCombo,
+          components: initial.components
+        };
+      }
+      return loadedProduct;
+    });
   });
 
   const [customers, setCustomers] = useState(() => getLocalData('pos_customers', initialCustomers));

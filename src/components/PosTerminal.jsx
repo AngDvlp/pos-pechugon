@@ -15,7 +15,7 @@ import {
   TransferIcon,
   ArrowRightIcon
 } from './UI/Icons';
-import { getEffectiveStock, adjustProductStock } from '../utils/inventory';
+import { adjustProductStock } from '../utils/inventory';
 
 const generateTransactionId = () => 'T-' + Math.floor(1000 + Math.random() * 9000);
 
@@ -88,27 +88,65 @@ export default function PosTerminal({
     }, 100);
   };
 
+  const getRemainingAddableStock = (product, currentCart, allProducts) => {
+    if (product.isCombo) {
+      if (!product.components || product.components.length === 0) return 0;
+      return Math.min(...product.components.map(comp => {
+        const p = allProducts.find(prod => prod.sku === comp.sku);
+        if (!p) return 0;
+        const required = comp.quantity;
+        const availableComp = getRemainingAddableStock(p, currentCart, allProducts);
+        return Math.floor(availableComp / required);
+      }));
+    }
+
+    const baseSku = product.baseProductSku || product.sku;
+    const baseProduct = allProducts.find(p => p.sku === baseSku);
+    if (!baseProduct) return 0;
+
+    // Total base stock in inventory
+    const totalBaseStock = baseProduct.stock;
+
+    // Calculate how much base stock is used by the cart
+    let usedBaseStock = 0;
+    currentCart.forEach(item => {
+      if (item.product.isCombo) {
+        item.product.components.forEach(comp => {
+          const compProduct = allProducts.find(p => p.sku === comp.sku);
+          const compBaseSku = compProduct?.baseProductSku || comp.sku;
+          if (compBaseSku === baseSku) {
+            const compEquivalence = compProduct?.baseEquivalence || 1.0;
+            usedBaseStock += comp.quantity * item.quantity * compEquivalence;
+          }
+        });
+      } else {
+        const itemBaseSku = item.product.baseProductSku || item.product.sku;
+        if (itemBaseSku === baseSku) {
+          const itemEquivalence = item.product.baseEquivalence || 1.0;
+          usedBaseStock += item.quantity * itemEquivalence;
+        }
+      }
+    });
+
+    const remainingBaseStock = Math.max(0, totalBaseStock - usedBaseStock);
+    const equivalence = product.baseEquivalence || 1.0;
+    return Math.floor(remainingBaseStock / equivalence);
+  };
+
   const getProductStock = (product) => {
-    return getEffectiveStock(product, products);
+    return getRemainingAddableStock(product, cart, products);
   };
 
   // Add item to cart
   const addToCart = (product) => {
-    const availableStock = getProductStock(product);
-    if (availableStock <= 0) {
-      showToast('Producto agotado (sin stock)', 'error');
+    const remainingStock = getProductStock(product);
+    if (remainingStock <= 0) {
+      showToast('Producto agotado o stock máximo alcanzado', 'error');
       return;
     }
 
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.product.sku === product.sku);
-      const currentQty = existingItem ? existingItem.quantity : 0;
-
-      if (currentQty >= availableStock) {
-        showToast(`Stock máximo alcanzado (${availableStock} disponibles)`, 'warning');
-        return prevCart;
-      }
-
       if (existingItem) {
         return prevCart.map(item => 
           item.product.sku === product.sku 
