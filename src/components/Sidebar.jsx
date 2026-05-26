@@ -17,11 +17,11 @@ export default function Sidebar({ activeView, setActiveView, currentUser, onLock
 
   const menuItems = [
     { id: 'pos', name: 'Terminal POS', icon: <POSIcon />, roles: ['supervisor', 'encargado'] },
-    { id: 'stock_declaration', name: 'Registrar Existencias', icon: <FoodIcon />, roles: ['supervisor', 'encargado'] },
+    { id: 'stock_declaration', name: 'Cocina', icon: <FoodIcon />, roles: ['supervisor', 'encargado'] },
     { id: 'cashcut', name: 'Corte de Caja', icon: <CashCutIcon />, roles: ['supervisor', 'encargado'] },
     { id: 'dashboard', name: 'Dashboard', icon: <DashboardIcon />, roles: ['supervisor'] },
     { id: 'inventory', name: 'Inventario', icon: <InventoryIcon />, roles: ['supervisor'] },
-    { id: 'history', name: 'Historiales', icon: <HistoryIcon />, roles: ['supervisor'] },
+    { id: 'history', name: 'Historial', icon: <HistoryIcon />, roles: ['supervisor', 'encargado'] },
     { id: 'customers', name: 'Clientes', icon: <CustomersIcon />, roles: ['supervisor'] },
     { id: 'users', name: 'Sucursales / Acceso', icon: <UsersIcon />, roles: ['supervisor'] },
     { id: 'settings', name: 'Configuración', icon: <SettingsIcon />, roles: ['supervisor'] },
